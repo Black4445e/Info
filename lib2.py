@@ -2,16 +2,20 @@ from proto import FreeFire_pb2, main_pb2, AccountPersonalShow_pb2
 import httpx
 import asyncio
 import json
+import base64
+import time
 from google.protobuf import json_format, message
 from google.protobuf.message import Message
 from Crypto.Cipher import AES
-import base64
 from typing import Tuple
 
 
+
+
+# --- Configurações principais
 MAIN_KEY = base64.b64decode('WWcmdGMlREV1aDYlWmNeOA==')
 MAIN_IV = base64.b64decode('Nm95WkRyMjJFM3ljaGpNJQ==')
-RELEASEVERSION = "OB48"
+RELEASEVERSION = "OB49"
 USERAGENT = "Dalvik/2.1.0 (Linux; U; Android 13; CPH2095 Build/RKQ1.211119.001)"
 SUPPORTED_REGIONS = ["IND", "BR", "SG", "RU", "ID", "TW", "US", "VN", "TH", "ME", "PK", "CIS"]
 ACCOUNTS = {
@@ -30,25 +34,31 @@ ACCOUNTS = {
 }
 
 
-async def json_to_proto(json_data: str, proto_message: Message) -> bytes:
-    json_format.ParseDict(json.loads(json_data), proto_message)
-    serialized_data = proto_message.SerializeToString()
-    return serialized_data
+# --- Utilitários de criptografia e conversão
 def pad(text: bytes) -> bytes:
     padding_length = AES.block_size - (len(text) % AES.block_size)
     padding = bytes([padding_length] * padding_length)
     return text + padding
+
 def aes_cbc_encrypt(key: bytes, iv: bytes, plaintext: bytes) -> bytes:
     aes = AES.new(key, AES.MODE_CBC, iv)
     padded_plaintext = pad(plaintext)
     ciphertext = aes.encrypt(padded_plaintext)
     return ciphertext
+
+async def json_to_proto(json_data: str, proto_message: Message) -> bytes:
+    json_format.ParseDict(json.loads(json_data), proto_message)
+    return proto_message.SerializeToString()
+
 def decode_protobuf(encoded_data: bytes, message_type: message.Message) -> message.Message:
-    message_instance = message_type()
-    message_instance.ParseFromString(encoded_data)
-    return message_instance
+    instance = message_type()
+    instance.ParseFromString(encoded_data)
+    return instance
+    
 
+# --- Autenticação
 
+        
 
 async def getAccess_Token(account):
     url = "https://ffmconnect.live.gop.garenanow.com/oauth/guest/token/grant"
@@ -65,19 +75,19 @@ async def getAccess_Token(account):
         return data.get("access_token", "0"), data.get("open_id", "0")
 
 
-
-
 async def create_jwt(region: str) -> Tuple[str, str, str]:
     account = ACCOUNTS.get(region)
     access_token, open_id = await getAccess_Token(account)
     json_data = json.dumps({
-      "open_id": open_id,
-      "open_id_type": "4",
-      "login_token": access_token,
-      "orign_platform_type": "4"
+        "open_id": open_id,
+        "open_id_type": "4",
+        "login_token": access_token,
+        "orign_platform_type": "4"
     })
+    print(f"[→] Login JSON:\n{json_data}")
     encoded_result = await json_to_proto(json_data, FreeFire_pb2.LoginReq())
     payload = aes_cbc_encrypt(MAIN_KEY, MAIN_IV, encoded_result)
+
     url = "https://loginbp.ggblueshark.com/MajorLogin"
     headers = {
         'User-Agent': USERAGENT,
@@ -89,34 +99,51 @@ async def create_jwt(region: str) -> Tuple[str, str, str]:
         'X-GA': "v1 1",
         'ReleaseVersion': RELEASEVERSION
     }
+
     async with httpx.AsyncClient() as client:
         response = await client.post(url, data=payload, headers=headers)
-        response_content = response.content
-        message = json.loads(json_format.MessageToJson(decode_protobuf(response_content, FreeFire_pb2.LoginRes)))
+        message = json.loads(json_format.MessageToJson(
+            decode_protobuf(response.content, FreeFire_pb2.LoginRes)
+        ))
         token = message.get("token", "0")
         region = message.get("lockRegion", "0")
         serverUrl = message.get("serverUrl", "0")
+        print(f"[✓] Token recebido: {token}")
+        print(f"[✓] URL servidor: {serverUrl}")
         return f"Bearer {token}", region, serverUrl
 
 
-
+# --- Função principal com LOG
 async def GetAccountInformation(ID, UNKNOWN_ID, regionMain, endpoint):
+    print(f"\n[→] Iniciando requisição:")
+    print(f"  ↳ ID: {ID}")
+    print(f"  ↳ UNKNOWN_ID: {UNKNOWN_ID}")
+    print(f"  ↳ Região solicitada: {regionMain}")
+    print(f"  ↳ Endpoint: {endpoint}")
+    
     json_data = json.dumps({
         "a": ID,
         "b": UNKNOWN_ID
-    })
+    }, indent=2)
+    print(f"\n[→] Payload JSON:\n{json_data}")
+
     encoded_result = await json_to_proto(json_data, main_pb2.GetPlayerPersonalShow())
     payload = aes_cbc_encrypt(MAIN_KEY, MAIN_IV, encoded_result)
+    print(f"[✓] Payload criptografado (tamanho: {len(payload)} bytes)")
+
     regionMain = regionMain.upper()
     if regionMain in SUPPORTED_REGIONS:
         token, region, serverUrl = await create_jwt(regionMain)
     else:
-        return {
+        erro = {
             "error": "Invalid request",
-            "message": f"Unsupported 'region' parameter. Supported regions are: {', '.join(SUPPORTED_REGIONS)}."
+            "message": f"Unsupported 'region'. Suportadas: {', '.join(SUPPORTED_REGIONS)}"
         }
+        print(f"[✗] {erro}")
+        return erro
+
     headers = {
-        'User-Agent': "Dalvik/2.1.0 (Linux; U; Android 13; A063 Build/TKQ1.221220.001)",
+        'User-Agent': USERAGENT,
         'Connection': "Keep-Alive",
         'Accept-Encoding': "gzip",
         'Content-Type': "application/octet-stream",
@@ -126,8 +153,22 @@ async def GetAccountInformation(ID, UNKNOWN_ID, regionMain, endpoint):
         'X-GA': "v1 1",
         'ReleaseVersion': RELEASEVERSION
     }
+
+    print(f"\n[→] Enviando POST para: {serverUrl + endpoint}")
+    print(f"[→] Headers:\n{json.dumps(headers, indent=2)}")
+
+    start_time = time.time()
     async with httpx.AsyncClient() as client:
         response = await client.post(serverUrl + endpoint, data=payload, headers=headers)
-        response_content = response.content
-        message = json.loads(json_format.MessageToJson(decode_protobuf(response_content, AccountPersonalShow_pb2.AccountPersonalShowInfo)))
-        return message
+    elapsed = time.time() - start_time
+
+    print(f"[✓] Status HTTP: {response.status_code} - Tempo: {elapsed:.2f}s")
+
+    decoded = decode_protobuf(response.content, AccountPersonalShow_pb2.AccountPersonalShowInfo)
+    message = json.loads(json_format.MessageToJson(decoded))
+    print(f"[←] Resposta JSON:\n{json.dumps(message, indent=2, ensure_ascii=False)}")
+    return message
+
+
+# --- Para rodar exemplo
+# asyncio.run(GetAccountInformation("123456789", 7, "BR", "/GetPlayerPersonalShow"))
