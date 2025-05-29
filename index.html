@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Informações da Conta</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #111;
+      color: #fff;
+      padding: 20px;
+    }
+    .container {
+      max-width: 900px;
+      margin: auto;
+      background-color: #222;
+      padding: 20px;
+      border-radius: 10px;
+    }
+    h1 {
+      text-align: center;
+    }
+    .info {
+      margin-bottom: 10px;
+    }
+    .label {
+      font-weight: bold;
+      color: #0f0;
+    }
+    .value {
+      margin-left: 10px;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    input, select {
+      padding: 8px;
+      width: 100%;
+      border: none;
+      border-radius: 5px;
+    }
+    button {
+      background-color: #0f0;
+      color: #000;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0c0;
+    }
+    hr {
+      margin: 20px 0;
+      border: 1px solid #333;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📜 Perfil do Jogador</h1>
+    <div class="form-group">
+      <label for="uid">🔢 ID do Jogador:</label>
+      <input type="text" id="uid" placeholder="Digite o ID...">
+    </div>
+    <div class="form-group">
+      <label for="region">🌎 Região:</label>
+      <select id="region">
+        <option value="br">🇧🇷 Brasil</option>
+        <option value="ind">🇮🇳 Índia</option>
+        <option value="id">🇮🇩 Indonésia</option>
+        <option value="th">🇹🇭 Tailândia</option>
+        <option value="vn">🇻🇳 Vietnã</option>
+        <option value="sg">🇸🇬 Singapura</option>
+        <option value="bd">🇧🇩 Bangladesh</option>
+        <option value="us">🇺🇸 EUA</option>
+        <option value="eu">🇪🇺 Europa</option>
+      </select>
+    </div>
+    <button onclick="fetchData()">🔍 Buscar</button>
+    <hr>
+    <div id="profileData"></div>
+  </div>
+
+  <script>
+    function formatarData(timestamp) {
+      const data = new Date(Number(timestamp) * 1000);
+      return data.toLocaleString("pt-BR");
+    }
+
+    async function fetchData() {
+      const uid = document.getElementById("uid").value;
+      const region = document.getElementById("region").value;
+
+      if (!uid || !region) {
+        alert("Preencha o ID e selecione a região.");
+        return;
+      }
+
+      try {
+        const res = await fetch(`http://127.0.0.1:3000/api/account?uid=${uid}&region=${region}`);
+        const data = await res.json();
+
+        const profile = data.basicInfo;
+        const clan = data.clanBasicInfo;
+        const captain = data.captainBasicInfo;
+        const pet = data.petInfo;
+        const social = data.socialInfo;
+        const credit = data.creditScoreInfo;
+        const profileInfo = data.profileInfo;
+
+        const skills = profileInfo.equipedSkills.map(id => `#${id}`).join(", ");
+
+        const container = document.getElementById("profileData");
+        container.innerHTML = `
+          <div class="info"><span class="label">👤 Nickname:</span><span class="value">${profile.nickname}</span></div>
+          <div class="info"><span class="label">🆔 Conta:</span><span class="value">${profile.accountId}</span></div>
+          <div class="info"><span class="label">🏅 Level:</span><span class="value">${profile.level} (XP: ${profile.exp.toLocaleString()})</span></div>
+          <div class="info"><span class="label">❤️ Likes:</span><span class="value">${profile.liked}</span></div>
+          <div class="info"><span class="label">🏆 Rank BR:</span><span class="value">${profile.rank} (${profile.rankingPoints} pts)</span></div>
+          <div class="info"><span class="label">🎯 Rank CS:</span><span class="value">${profile.csRank} (${profile.csRankingPoints} pts)</span></div>
+          <div class="info"><span class="label">📈 Máx. Rank BR:</span><span class="value">${profile.maxRank}</span></div>
+          <div class="info"><span class="label">📈 Máx. Rank CS:</span><span class="value">${profile.csMaxRank}</span></div>
+          <div class="info"><span class="label">🎖️ Passe Elite:</span><span class="value">${profile.hasElitePass ? "Sim" : "Não"}</span></div>
+          <div class="info"><span class="label">🏵️ Título:</span><span class="value">#${profile.title}</span></div>
+          <div class="info"><span class="label">📛 Badges:</span><span class="value">${profile.badgeCnt} (ID: ${profile.badgeId})</span></div>
+          <div class="info"><span class="label">🖼️ Banner ID:</span><span class="value">${profile.bannerId}</span></div>
+          <div class="info"><span class="label">🧑 HeadPic ID:</span><span class="value">${profile.headPic}</span></div>
+          <div class="info"><span class="label">🧠 Skills Equipadas:</span><span class="value">${skills}</span></div>
+          <div class="info"><span class="label">📆 Criada em:</span><span class="value">${formatarData(profile.createAt)}</span></div>
+          <div class="info"><span class="label">🕓 Último login:</span><span class="value">${formatarData(profile.lastLoginAt)}</span></div>
+          <div class="info"><span class="label">📦 Versão:</span><span class="value">${profile.releaseVersion}</span></div>
+
+          <hr>
+          <div class="info"><span class="label">🏡 Guilda:</span><span class="value">${clan.clanName} (Nv. ${clan.clanLevel})</span></div>
+          <div class="info"><span class="label">🧑‍✈️ Capitão:</span><span class="value">${captain.nickname} (ID: ${clan.captainId})</span></div>
+
+          <hr>
+          <div class="info"><span class="label">🐾 Pet:</span><span class="value">ID ${pet.id} - Nível ${pet.level}</span></div>
+          <div class="info"><span class="label">🎨 Skin do Pet:</span><span class="value">${pet.skinId}</span></div>
+          <div class="info"><span class="label">🧪 XP do Pet:</span><span class="value">${pet.exp}</span></div>
+          <div class="info"><span class="label">🧠 Skill do Pet:</span><span class="value">ID ${pet.selectedSkillId}</span></div>
+
+          <hr>
+          <div class="info"><span class="label">📋 Bio:</span><span class="value">${social.signature}</span></div>
+          <div class="info"><span class="label">💬 Idioma:</span><span class="value">${social.language.replace("Language_", "")}</span></div>
+          <div class="info"><span class="label">💯 Score de Crédito:</span><span class="value">${credit.creditScore}</span></div>
+          <div class="info"><span class="label">📆 Fim do Ciclo:</span><span class="value">${formatarData(credit.periodicSummaryEndTime)}</span></div>
+        `;
+      } catch (error) {
+        console.error("Erro ao buscar dados:", error);
+        alert("Erro ao buscar dados da conta.");
+      }
+    }
+  </script>
+</body>
+</html>
