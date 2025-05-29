@@ -1,15 +1,16 @@
 from functools import wraps
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from cachetools import TTLCache
 import lib2
 import json
 import asyncio
 
-app = Flask(__name__)
-CORS(app)
+from google.protobuf.json_format import MessageToJson
 
-# Create a cache with a TTL (time-to-live) of 300 seconds (5 minutes)
+app = Flask(__name__)
+CORS(app)  # Habilita CORS
+
 cache = TTLCache(maxsize=100, ttl=300)
 
 def cached_endpoint(ttl=300):
@@ -27,31 +28,28 @@ def cached_endpoint(ttl=300):
     return decorator
 
 
+@app.route('/')
+def serve_html():
+    return send_from_directory('.', 'index.html')
 
-# curl -X GET 'http://127.0.0.1:3000/api/account?uid=1813014615&region=ind'
+
 @app.route('/api/account')
 @cached_endpoint()
 def get_account_info():
     region = request.args.get('region')
     uid = request.args.get('uid')
-    
-    if not uid:
-        response = {
-            "error": "Invalid request",
-            "message": "Empty 'uid' parameter. Please provide a valid 'uid'."
-        }
-        return jsonify(response), 400, {'Content-Type': 'application/json; charset=utf-8'}
 
-    if not region:
-        response = {
+    if not uid or not region:
+        return jsonify({
             "error": "Invalid request",
-            "message": "Empty 'region' parameter. Please provide a valid 'region'."
-        }
-        return jsonify(response), 400, {'Content-Type': 'application/json; charset=utf-8'}
+            "message": "Parameters 'uid' and 'region' are required."
+        }), 400
 
-    return_data = asyncio.run(lib2.GetAccountInformation(uid, "7", region, "/GetPlayerPersonalShow"))
-    formatted_json = json.dumps(return_data, indent=2, ensure_ascii=False)
-    return formatted_json, 200, {'Content-Type': 'application/json; charset=utf-8'}
+    data = asyncio.run(lib2.GetAccountInformation(uid, "7", region, "/GetPlayerPersonalShow"))
+    return json.dumps(data, indent=2, ensure_ascii=False), 200, {
+        'Content-Type': 'application/json; charset=utf-8'
+    }
+
 
 
 if __name__ == '__main__':
