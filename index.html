@@ -99,7 +99,7 @@
       }
 
       try {
-        const res = await fetch(`http://127.0.0.1:3000/api/account?uid=${uid}&region=${region}`);
+        const res = await fetch(`https://info-api-589w.onrender.com/api/account?uid=${uid}&region=${region}`);
         const data = await res.json();
 
         const profile = data.basicInfo;
