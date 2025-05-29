@@ -104,3 +104,69 @@ if _descriptor._USE_C_DESCRIPTORS == False:
   _globals['_ACCOUNTPERSONALSHOWINFO']._serialized_start=6419
   _globals['_ACCOUNTPERSONALSHOWINFO']._serialized_end=7309
 # @@protoc_insertion_point(module_scope)
+
+
+
+from datetime import datetime
+
+async def GetAccountInformation(ID, UNKNOWN_ID, regionMain, endpoint):
+    json_data = json.dumps({
+        "a": ID,
+        "b": UNKNOWN_ID
+    })
+    encoded_result = await json_to_proto(json_data, main_pb2.GetPlayerPersonalShow())
+    payload = aes_cbc_encrypt(MAIN_KEY, MAIN_IV, encoded_result)
+
+    regionMain = regionMain.upper()
+    if regionMain in SUPPORTED_REGIONS:
+        token, region, serverUrl = await create_jwt(regionMain)
+    else:
+        return {
+            "error": "Invalid request",
+            "message": f"Unsupported 'region' parameter. Supported regions are: {', '.join(SUPPORTED_REGIONS)}."
+        }
+
+    headers = {
+        'User-Agent': "Dalvik/2.1.0 (Linux; U; Android 13; A063 Build/TKQ1.221220.001)",
+        'Connection': "Keep-Alive",
+        'Accept-Encoding': "gzip",
+        'Content-Type': "application/octet-stream",
+        'Expect': "100-continue",
+        'Authorization': token,
+        'X-Unity-Version': "2018.4.11f1",
+        'X-GA': "v1 1",
+        'ReleaseVersion': RELEASEVERSION
+    }
+
+    async with httpx.AsyncClient() as client:
+        response = await client.post(serverUrl + endpoint, data=payload, headers=headers)
+        response_content = response.content
+        decoded = decode_protobuf(response_content, AccountPersonalShow_pb2.AccountPersonalShowInfo)
+
+        last_login = datetime.fromtimestamp(decoded.last_login_time).strftime('%Y-%m-%d %H:%M:%S') if decoded.last_login_time else "Desconhecido"
+
+        guild = {
+            "guild_id": decoded.guild_info.guild_id,
+            "guild_name": decoded.guild_info.guild_name,
+            "guild_level": decoded.guild_info.guild_level,
+            "job": decoded.guild_info.job
+        } if decoded.HasField("guild_info") else {}
+
+        achievements = [{"id": a.id, "title": a.title} for a in decoded.achievements]
+
+        return {
+            "account_id": decoded.account_id,
+            "player_id": decoded.player_id,
+            "user_name": decoded.user_name,
+            "level": decoded.level,
+            "like_num": decoded.like_num,
+            "signature": decoded.signature,
+            "last_login_time": last_login,
+            "avatar": decoded.avatar,
+            "frame": decoded.frame,
+            "banner": decoded.banner,
+            "title": decoded.title,
+            "battle_tag": decoded.battle_tag,
+            "guild": guild,
+            "achievements": achievements
+        }
