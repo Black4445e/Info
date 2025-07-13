@@ -95,25 +95,6 @@ async def create_jwt(uid: str, password: str):
         return f"Bearer {token}", region, serverUrl
 
 
-@app.route('/auth', methods=['GET'])
-def auth():
-    uid = request.args.get('uid')
-    password = request.args.get('password')
-
-    if not uid or not password:
-        return jsonify({"error": "Parâmetros 'uid' e 'password' são obrigatórios"}), 400
-
-    try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        token, lock_region, server_url = loop.run_until_complete(create_jwt(uid, password))
-        loop.close()
-
-        return jsonify({
-            "token": token,
-            "lock_region": lock_region,
-            "server_url": server_url
-        })
 
     except Exception as e:
         return jsonify({"error": str(e)}), 400
